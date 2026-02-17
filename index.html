@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#0b1020" />
-  <title>Hex Block Blast (iPhone Optimized)</title>
+  <title>Hex Block Blast (1200x2500 Scroll)</title>
 
   <style>
     :root{
@@ -24,10 +24,11 @@
     }
 
     html, body {
-      height: 100%;
+      height: auto;
+      min-height: 100%;
       margin: 0;
       background: var(--bg);
-      overflow: hidden;
+      overflow: auto;
       -webkit-text-size-adjust: 100%;
     }
 
@@ -40,9 +41,9 @@
     }
 
     .app{
-      height: 100dvh;
+      min-height: 100dvh;
       display: grid;
-      grid-template-rows: auto 1fr;
+      grid-template-rows: auto auto;
       padding:
         calc(10px + env(safe-area-inset-top))
         calc(10px + env(safe-area-inset-right))
@@ -108,18 +109,34 @@
 
     .frameWrap{
       position: relative;
-      background: #000;
+      touch-action: pan-x pan-y;
+      background: rgba(0,0,0,.35);
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      overflow: hidden;
-      min-height: 0; /* grid内で縮むため */
+      overflow: auto; /* allow scroll */
+      -webkit-overflow-scrolling: touch;
+      min-height: 0;
+    }
+
+    /* Fixed stage size requested */
+    
+    /* Visible window size on iPhone: scroll inside */
+    .frameWrap{
+      max-height: calc(100dvh - 120px);
+    }
+
+    .stage{
+      width: 1200px;
+      height: 2500px;
+      position: relative;
+      background: #000;
     }
 
     iframe{
       position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
+      left:0; top:0;
+      width:1200px;
+      height:2500px;
       border:0;
       background:#000;
     }
@@ -168,12 +185,14 @@
     </div>
 
     <div class="frameWrap" id="wrap">
+      <div class="stage" id="stage">
       <iframe
         id="game"
         src="https://d215wf54wdvfq3.cloudfront.net/"
         allow="fullscreen; autoplay; clipboard-read; clipboard-write"
         referrerpolicy="no-referrer"
       ></iframe>
+      </div>
 
       <div class="fallback" id="fallback">
         <div class="card">
@@ -200,11 +219,7 @@
       if (now - lastTouchEnd <= 300) e.preventDefault();
       lastTouchEnd = now;
     }, { passive: false });
-
-    // スクロール/バウンスを抑制（画面内でプレイ中にページが動かないように）
-    document.addEventListener("touchmove", (e) => {
-      // ただし、ここでは完全に止める（ゲーム中の誤スクロール防止）
-      e.preventDefault();
+    // NOTE: scrolling is enabled for this version (requested).
     }, { passive: false });
 
     const iframe = document.getElementById("game");
