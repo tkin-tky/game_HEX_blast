@@ -2,252 +2,669 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
-  />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#0b1020" />
-  <title>iPhone Game (1200x2500 Fit)</title>
-
+  <title>Hex Drag Puzzle (iPhone)</title>
   <style>
     :root{
       --bg:#0b1020;
-      --panel: rgba(255,255,255,.08);
+      --panel: rgba(255,255,255,.07);
       --line: rgba(255,255,255,.14);
       --txt: rgba(235,245,255,.92);
-      --txt2: rgba(235,245,255,.68);
-      --btn: rgba(120,170,255,.18);
+      --txt2: rgba(235,245,255,.70);
+      --good: rgba(120,255,210,.25);
+      --bad: rgba(255,120,160,.28);
+      --btn: rgba(120,170,255,.16);
       --btn2: rgba(120,170,255,.26);
-      --radius: 14px;
+      --r: 16px;
+      --shadow: 0 18px 38px rgba(0,0,0,.45);
+      --stageW: 1200px;
+      --stageH: 2500px;
+      --scale: 1;
     }
-
-    html, body {
-      width: 1200px;
-      height: 2500px;
-      margin: 0;
+    html, body{
+      margin:0;
       background: var(--bg);
-      overflow: hidden; /* fit within 2500px */
       -webkit-text-size-adjust: 100%;
-    }
-
-    /* iPhone: タップ操作最適化 */
-    body{
+      overflow:hidden;
+      height:100%;
       touch-action: manipulation;
-      -webkit-touch-callout: none;
       -webkit-tap-highlight-color: transparent;
-      user-select: none;
+      user-select:none;
+      font-family: system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",Segoe UI,Roboto,sans-serif;
+      color: var(--txt);
     }
-
-    .app{
-      width: 1200px;
-      height: 2500px;
-      display: grid;
-      grid-template-rows: auto 1fr;
+    /* Stage is fixed 1200x2500; we scale to fit device width, keep everything inside */
+    .viewport{
+      width: 100vw;
+      height: 100dvh;
+      overflow: hidden;
+      display:grid;
+      place-items:center;
       padding:
-        calc(10px + env(safe-area-inset-top))
-        calc(10px + env(safe-area-inset-right))
-        calc(10px + env(safe-area-inset-bottom))
-        calc(10px + env(safe-area-inset-left));
-      gap: 10px;
-      box-sizing: border-box;
+        env(safe-area-inset-top)
+        env(safe-area-inset-right)
+        env(safe-area-inset-bottom)
+        env(safe-area-inset-left);
+      box-sizing:border-box;
+    }
+    .stage{
+      width: var(--stageW);
+      height: var(--stageH);
+      transform: scale(var(--scale));
+      transform-origin: top center;
+      background:
+        radial-gradient(1000px 600px at 18% 12%, rgba(120,170,255,.16), transparent 60%),
+        radial-gradient(900px 560px at 86% 88%, rgba(120,255,210,.10), transparent 62%),
+        linear-gradient(180deg, rgba(255,255,255,.04), transparent 35%);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      position:relative;
     }
 
     .topbar{
+      position:absolute;
+      left: 18px; right:18px; top: 18px;
+      display:flex;
+      gap: 12px;
+      align-items:center;
+      justify-content:space-between;
+      padding: 14px 16px;
+      background: var(--panel);
+      border:1px solid var(--line);
+      border-radius: 18px;
+      backdrop-filter: blur(10px);
+    }
+    .title{
+      display:flex; flex-direction:column; gap:4px; min-width:0;
+    }
+    .title b{
+      font-size: 18px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .title span{
+      font-size: 13px; color: var(--txt2);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .stats{
+      display:flex; gap:12px; align-items:center; flex-wrap:wrap; justify-content:flex-end;
+      font-size:14px;
+    }
+    .pill{
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(0,0,0,.22);
+      border:1px solid rgba(255,255,255,.12);
+      color: var(--txt);
+      display:flex; gap:8px; align-items:center;
+    }
+    .pill small{ color: var(--txt2); font-size: 12px; }
+    .btn{
+      appearance:none;
+      border:1px solid var(--line);
+      background: var(--btn);
+      color: var(--txt);
+      padding: 11px 14px;
+      border-radius: 14px;
+      font-weight:700;
+      cursor:pointer;
+      touch-action: manipulation;
+    }
+    .btn:active{ transform: translateY(1px); background: var(--btn2); }
+
+    .boardWrap{
+      position:absolute;
+      left: 18px; right:18px;
+      top: 120px;
+      height: 1600px;
+      background: rgba(0,0,0,.22);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius: 22px;
+      overflow:hidden;
+    }
+    canvas{
+      width:100%;
+      height:100%;
+      display:block;
+      touch-action: none; /* we handle drag on canvas */
+    }
+
+    .tray{
+      position:absolute;
+      left: 18px; right:18px;
+      bottom: 18px;
+      height: 720px;
+      display:grid;
+      grid-template-rows: auto 1fr;
+      gap: 12px;
+      padding: 16px;
+      background: var(--panel);
+      border:1px solid var(--line);
+      border-radius: 22px;
+      backdrop-filter: blur(10px);
+    }
+    .trayTop{
       display:flex;
       align-items:center;
       justify-content:space-between;
-      gap:10px;
-      padding:10px 12px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      backdrop-filter: blur(10px);
+      gap: 12px;
     }
-
-    .title{
-      display:flex;
-      flex-direction:column;
-      gap:2px;
-      min-width: 0;
-    }
-
-    .title b{
-      color: var(--txt);
-      font: 700 14px/1.2 system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",Segoe UI,Roboto,sans-serif;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .title span{
+    .hint{
       color: var(--txt2);
-      font: 12px/1.2 system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",Segoe UI,Roboto,sans-serif;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-size: 13px;
+      line-height: 1.4;
     }
 
-    .btns{ display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
-
-    button, a.btn{
-      appearance:none;
-      border: 1px solid var(--line);
-      background: var(--btn);
-      color: var(--txt);
-      padding: 10px 12px;
-      border-radius: 12px;
-      font: 600 13px/1 system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",Segoe UI,Roboto,sans-serif;
-      text-decoration:none;
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      cursor:pointer;
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
+    .pieces{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      align-items:stretch;
     }
-    button:active, a.btn:active{ transform: translateY(1px); background: var(--btn2); }
-
-    .frameWrap{
-      position: relative;
-      background: #000;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      overflow: hidden;
-      min-height: 0; /* grid内で縮むため */
-    }
-
-    iframe{
-      position:absolute;
-      inset:0;
-      width:1200px;
-      height:100%;
-      border:0;
-      background:#000;
-    }
-
-    /* もし埋め込み禁止(CSP/X-Frame-Options)の場合の案内 */
-    .fallback{
-      position:absolute;
-      inset:0;
-      display:none;
+    .slot{
+      position:relative;
+      border-radius: 18px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.22);
+      overflow:hidden;
+      display:grid;
       place-items:center;
-      padding: 18px;
-      text-align:center;
+      touch-action: none;
+    }
+    .slot canvas{
+      width:100%;
+      height:100%;
+    }
+
+    .toast{
+      position:absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 760px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(0,0,0,.55);
+      border:1px solid rgba(255,255,255,.14);
       color: var(--txt);
-      font: 14px/1.6 system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",Segoe UI,Roboto,sans-serif;
-      background: radial-gradient(1200px 600px at 20% 10%, rgba(120,170,255,.22), transparent 55%),
-                  radial-gradient(900px 500px at 80% 90%, rgba(120,255,210,.10), transparent 55%),
-                  rgba(0,0,0,.85);
-    }
-    .fallback .card{
-      max-width: 560px;
-      width: 100%;
-      padding: 16px 14px;
-      background: rgba(255,255,255,.08);
-      border: 1px solid rgba(255,255,255,.14);
-      border-radius: 16px;
+      font-size: 13px;
+      display:none;
       backdrop-filter: blur(10px);
+      pointer-events:none;
+      max-width: calc(100% - 80px);
+      text-align:center;
     }
-    .fallback .small{ color: var(--txt2); font-size: 12px; margin-top: 8px; }
+
+    /* Small phones: ensure scaled stage fits */
+    @media (max-width: 420px){
+      .title b{ font-size: 16px; }
+      .title span{ font-size: 12px; }
+    }
   </style>
 </head>
-
 <body>
-  <div class="app">
-    <div class="topbar">
-      <div class="title">
-        <b>Hex Block Blast</b>
-        <span>iPhone表示最適化（安全領域・回転・ズーム抑制）</span>
+  <div class="viewport">
+    <div class="stage" id="stage">
+      <div class="topbar">
+        <div class="title">
+          <b>Hex Drag Puzzle</b>
+          <span>ブロックをドラッグして六角グリッドの任意のマスへ配置</span>
+        </div>
+        <div class="stats">
+          <div class="pill"><small>Score</small><b id="score">0</b></div>
+          <button class="btn" id="restart">Restart</button>
+        </div>
       </div>
-      <div class="btns">
-        <a class="btn" id="openBtn" href="https://d215wf54wdvfq3.cloudfront.net/" target="_blank" rel="noopener">
-          外部で開く
-        </a>
-        <button id="fsBtn" type="button">全画面</button>
-        <button id="reloadBtn" type="button">再読み込み</button>
+
+      <div class="boardWrap">
+        <canvas id="board"></canvas>
       </div>
-    </div>
 
-    <div class="frameWrap" id="wrap">
-      <iframe
-        id="game"
-        src="https://d215wf54wdvfq3.cloudfront.net/"
-        allow="fullscreen; autoplay; clipboard-read; clipboard-write"
-        referrerpolicy="no-referrer"
-      ></iframe>
+      <div class="toast" id="toast"></div>
 
-      <div class="fallback" id="fallback">
-        <div class="card">
-          <div style="font-weight:700; font-size:15px; margin-bottom:8px;">
-            埋め込み表示がブロックされています
+      <div class="tray">
+        <div class="trayTop">
+          <div class="hint">
+            ・下の3つのピースをドラッグ → 盤面にスナップして配置<br>
+            ・置けない位置は赤表示（指を離しても置けません）<br>
+            ・ピースが無くなったら自動補充します
           </div>
-          <div>
-            配信側が <b>X-Frame-Options</b> や <b>CSP</b> で iframe 埋め込みを禁止している可能性があります。<br/>
-            下の「外部で開く」から直接ゲームを開いてください。
-          </div>
-          <div class="small">
-            ※このHTMLは“表示と操作感（ズーム抑制/安全領域/回転）”を最適化します。ゲーム本体のUI・タップ判定は配信側の実装に依存します。
-          </div>
+          <div class="pill"><small>Placed</small><b id="placed">0</b></div>
+        </div>
+
+        <div class="pieces">
+          <div class="slot"><canvas class="piece" data-i="0"></canvas></div>
+          <div class="slot"><canvas class="piece" data-i="1"></canvas></div>
+          <div class="slot"><canvas class="piece" data-i="2"></canvas></div>
         </div>
       </div>
     </div>
   </div>
 
-  <script>
-    // iPhone: ダブルタップでズームする挙動を抑制（Safari対策）
-    let lastTouchEnd = 0;
-    document.addEventListener("touchend", (e) => {
-      const now = Date.now();
-      if (now - lastTouchEnd <= 300) e.preventDefault();
-      lastTouchEnd = now;
-    }, { passive: false });
+<script>
+(() => {
+  // ---------- Fit fixed stage to device width ----------
+  const stage = document.getElementById("stage");
+  function fitStage(){
+    const vw = Math.max(320, window.innerWidth || 375);
+    const pad = 16; // viewport padding approximation
+    const scale = Math.min(1, (vw - pad) / 1200);
+    document.documentElement.style.setProperty("--scale", scale.toFixed(4));
+  }
+  window.addEventListener("resize", fitStage, {passive:true});
+  window.addEventListener("orientationchange", () => setTimeout(fitStage, 80), {passive:true});
+  fitStage();
 
-    // スクロール/バウンスを抑制（画面内でプレイ中にページが動かないように）
-    document.addEventListener("touchmove", (e) => {
-      // ただし、ここでは完全に止める（ゲーム中の誤スクロール防止）
-      e.preventDefault();
-    }, { passive: false });
+  // ---------- Helpers: hex geometry (pointy-top axial coords) ----------
+  // axial (q,r) with cube (x=q, z=r, y=-x-z)
+  const HEX_R = 56;          // hex radius (visual)
+  const GAP = 2;             // subtle gap
+  const BOARD_RADIUS = 4;    // board "radius" (hexagon of radius N)
 
-    const iframe = document.getElementById("game");
-    const fallback = document.getElementById("fallback");
-    const fsBtn = document.getElementById("fsBtn");
-    const reloadBtn = document.getElementById("reloadBtn");
-    const wrap = document.getElementById("wrap");
+  const boardCanvas = document.getElementById("board");
+  const bctx = boardCanvas.getContext("2d");
 
-    // 全画面（iOS Safariは制限あり：可能な範囲で）
-    fsBtn.addEventListener("pointerdown", async (e) => {
-      e.preventDefault();
-      try{
-        if (!document.fullscreenElement && wrap.requestFullscreen) {
-          await wrap.requestFullscreen();
-        } else if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        }
-      }catch(err){
-        // iOSではフルスクリーンが効かない場合があるので何もしない
-      }
-    });
+  // handle DPR
+  function resizeCanvasToCSS(canvas, ctx){
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    return rect;
+  }
 
-    reloadBtn.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      iframe.src = iframe.src;
-      // もし何も表示されなければfallbackを出す（簡易）
-      setTimeout(checkEmbed, 1200);
-    });
+  let boardRect = null;
+  function layoutBoard(){
+    boardRect = resizeCanvasToCSS(boardCanvas, bctx);
+  }
+  layoutBoard();
+  window.addEventListener("resize", () => { layoutBoard(); draw(); }, {passive:true});
 
-    function checkEmbed(){
-      // クロスオリジンなので中身は読めない。
-      // ここでは「読み込みが進まず真っ黒」などの時にfallbackを出す簡易判定。
-      // 完全ではないが、埋め込み禁止時の案内として機能する。
-      // 1.2秒後にまだフォーカスできない/表示が怪しい場合を想定
-      // （確実に検出できないので、ユーザーが外部で開ける導線を常に残す）
-      // fallbackはユーザー操作で見えるようにもできるが、ここでは自動表示のみ。
-      // 何もせず、手動で「外部で開く」も可能。
+  // board center in CSS pixels
+  function boardCenter(){
+    return { x: boardRect.width/2, y: boardRect.height/2 };
+  }
+
+  function axialToPixel(q, r){
+    // pointy-top axial to pixel
+    const x = HEX_R * Math.sqrt(3) * (q + r/2);
+    const y = HEX_R * 3/2 * r;
+    const c = boardCenter();
+    return { x: c.x + x, y: c.y + y };
+  }
+
+  function pixelToAxial(x, y){
+    const c = boardCenter();
+    const px = x - c.x;
+    const py = y - c.y;
+    const q = (Math.sqrt(3)/3 * px - 1/3 * py) / HEX_R;
+    const r = (2/3 * py) / HEX_R;
+    return axialRound(q, r);
+  }
+
+  function axialRound(q, r){
+    // convert to cube, round, back to axial
+    let x = q;
+    let z = r;
+    let y = -x - z;
+    let rx = Math.round(x), ry = Math.round(y), rz = Math.round(z);
+    const x_diff = Math.abs(rx - x);
+    const y_diff = Math.abs(ry - y);
+    const z_diff = Math.abs(rz - z);
+    if (x_diff > y_diff && x_diff > z_diff) rx = -ry - rz;
+    else if (y_diff > z_diff) ry = -rx - rz;
+    else rz = -rx - ry;
+    return { q: rx, r: rz };
+  }
+
+  function hexCorners(cx, cy, radius){
+    const pts = [];
+    for(let i=0;i<6;i++){
+      const ang = (Math.PI/180) * (60*i - 30); // pointy-top
+      pts.push([cx + radius*Math.cos(ang), cy + radius*Math.sin(ang)]);
     }
+    return pts;
+  }
 
-    // 初回
-    setTimeout(checkEmbed, 1200);
-  </script>
+  function inBoard(q, r){
+    // cube distance <= BOARD_RADIUS
+    const x=q, z=r, y=-x-z;
+    return Math.max(Math.abs(x), Math.abs(y), Math.abs(z)) <= BOARD_RADIUS;
+  }
+
+  // list all board cells
+  const cells = [];
+  for(let q=-BOARD_RADIUS; q<=BOARD_RADIUS; q++){
+    for(let r=-BOARD_RADIUS; r<=BOARD_RADIUS; r++){
+      if(inBoard(q,r)) cells.push({q,r});
+    }
+  }
+
+  // occupancy
+  const occ = new Map(); // key "q,r" => colorIndex
+  const key = (q,r)=> `${q},${r}`;
+
+  // ---------- Pieces ----------
+  // Pieces are sets of axial offsets around an anchor (0,0).
+  // Keep them small & friendly for iPhone drag.
+  const SHAPES = [
+    { name:"single", blocks:[[0,0]] },
+    { name:"line2", blocks:[[0,0],[1,0]] },
+    { name:"line3", blocks:[[0,0],[1,0],[2,0]] },
+    { name:"tri",   blocks:[[0,0],[1,0],[0,1]] },
+    { name:"hook",  blocks:[[0,0],[1,0],[0,1],[0,2]] },
+    { name:"zig",   blocks:[[0,0],[1,0],[1,1],[2,1]] },
+    { name:"ring5", blocks:[[0,0],[1,0],[0,1],[-1,1],[-1,0]] },
+  ];
+
+  const COLORS = [
+    "rgba(120,170,255,.95)",
+    "rgba(120,255,210,.92)",
+    "rgba(255,190,120,.92)",
+    "rgba(255,120,160,.92)",
+    "rgba(190,120,255,.92)"
+  ];
+
+  function randInt(n){ return Math.floor(Math.random()*n); }
+  function pickShape(){ return SHAPES[randInt(SHAPES.length)]; }
+  function pickColor(){ return randInt(COLORS.length); }
+
+  const tray = [
+    { shape: pickShape(), color: pickColor(), used:false },
+    { shape: pickShape(), color: pickColor(), used:false },
+    { shape: pickShape(), color: pickColor(), used:false },
+  ];
+
+  // ---------- Tray canvases ----------
+  const pieceCanvases = [...document.querySelectorAll("canvas.piece")];
+  const pctxs = pieceCanvases.map(c => c.getContext("2d"));
+  function layoutPieces(){
+    pieceCanvases.forEach((c,i) => resizeCanvasToCSS(c, pctxs[i]));
+  }
+  layoutPieces();
+  window.addEventListener("resize", () => { layoutPieces(); drawPieces(); }, {passive:true});
+
+  function drawPiecePreview(ctx, rect, piece){
+    ctx.clearRect(0,0,rect.width,rect.height);
+    // Fit piece into slot
+    const blocks = piece.shape.blocks;
+    const pts = blocks.map(([dq,dr]) => axialToLocal(dq,dr));
+    let minx=Infinity,maxx=-Infinity,miny=Infinity,maxy=-Infinity;
+    for(const p of pts){
+      minx=Math.min(minx,p.x); maxx=Math.max(maxx,p.x);
+      miny=Math.min(miny,p.y); maxy=Math.max(maxy,p.y);
+    }
+    const pad = 24;
+    const w = maxx-minx + HEX_R*2;
+    const h = maxy-miny + HEX_R*2;
+    const sx = (rect.width - pad*2) / w;
+    const sy = (rect.height - pad*2) / h;
+    const s = Math.min(sx, sy, 1.05);
+
+    const ox = rect.width/2 - (minx+maxx)/2 * s;
+    const oy = rect.height/2 - (miny+maxy)/2 * s;
+
+    // draw blocks
+    for(const [dq,dr] of blocks){
+      const lp = axialToLocal(dq,dr);
+      const cx = ox + lp.x*s;
+      const cy = oy + lp.y*s;
+      drawHex(ctx, cx, cy, (HEX_R-4)*s, COLORS[piece.color], "rgba(0,0,0,.35)");
+    }
+  }
+
+  function axialToLocal(q,r){
+    const x = HEX_R * Math.sqrt(3) * (q + r/2);
+    const y = HEX_R * 3/2 * r;
+    return {x,y};
+  }
+
+  function drawHex(ctx, cx, cy, radius, fill, stroke){
+    const pts = hexCorners(cx,cy,radius);
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for(let i=1;i<6;i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+
+    // subtle highlight
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - radius*0.92);
+    ctx.lineTo(cx + radius*0.78, cy - radius*0.12);
+    ctx.lineTo(cx, cy + radius*0.06);
+    ctx.closePath();
+    ctx.fillStyle = "white";
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawGrid(){
+    const c = boardCenter();
+    // background vignette
+    const g = bctx.createRadialGradient(c.x, c.y, 80, c.x, c.y, Math.min(boardRect.width, boardRect.height)*0.55);
+    g.addColorStop(0, "rgba(120,170,255,.10)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    bctx.fillStyle = g;
+    bctx.fillRect(0,0,boardRect.width,boardRect.height);
+
+    for(const cell of cells){
+      const p = axialToPixel(cell.q, cell.r);
+      const isOcc = occ.has(key(cell.q, cell.r));
+      const colIndex = occ.get(key(cell.q, cell.r));
+      const fill = isOcc ? COLORS[colIndex] : "rgba(255,255,255,.04)";
+      const stroke = isOcc ? "rgba(0,0,0,.35)" : "rgba(255,255,255,.10)";
+      drawHex(bctx, p.x, p.y, HEX_R - GAP, fill, stroke);
+    }
+  }
+
+  // ---------- Drag & Drop ----------
+  let drag = null;
+  // drag object:
+  // { fromIndex, piece, pointerId, startX,startY, x,y, anchorAxial:{q,r}, valid:boolean }
+
+  function toast(msg){
+    const el = document.getElementById("toast");
+    el.textContent = msg;
+    el.style.display = "block";
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.style.display="none", 1800);
+  }
+
+  function boardPointFromEvent(e){
+    const r = boardCanvas.getBoundingClientRect();
+    const x = (e.clientX - r.left);
+    const y = (e.clientY - r.top);
+    return {x,y};
+  }
+
+  function canPlace(piece, aq, ar){
+    for(const [dq,dr] of piece.shape.blocks){
+      const q = aq + dq, r = ar + dr;
+      if(!inBoard(q,r)) return false;
+      if(occ.has(key(q,r))) return false;
+    }
+    return true;
+  }
+
+  function place(piece, aq, ar){
+    for(const [dq,dr] of piece.shape.blocks){
+      const q = aq + dq, r = ar + dr;
+      occ.set(key(q,r), piece.color);
+    }
+  }
+
+  function drawGhost(){
+    if(!drag) return;
+    const { piece, anchorAxial, valid } = drag;
+    const col = valid ? "rgba(120,255,210,.92)" : "rgba(255,120,160,.92)";
+    const stroke = valid ? "rgba(0,0,0,.35)" : "rgba(0,0,0,.55)";
+    for(const [dq,dr] of piece.shape.blocks){
+      const q = anchorAxial.q + dq;
+      const r = anchorAxial.r + dr;
+      const p = axialToPixel(q,r);
+      drawHex(bctx, p.x, p.y, HEX_R - GAP, col, stroke);
+    }
+  }
+
+  function draw(){
+    bctx.clearRect(0,0,boardRect.width,boardRect.height);
+    drawGrid();
+    drawGhost();
+  }
+
+  function drawPieces(){
+    pieceCanvases.forEach((c, i) => {
+      const rect = c.getBoundingClientRect();
+      const ctx = pctxs[i];
+      ctx.clearRect(0,0,rect.width,rect.height);
+      const piece = tray[i];
+      if(piece.used){
+        // dimmed slot
+        ctx.fillStyle = "rgba(255,255,255,.04)";
+        ctx.fillRect(0,0,rect.width,rect.height);
+        ctx.fillStyle = "rgba(235,245,255,.40)";
+        ctx.font = "700 16px system-ui,-apple-system,'Noto Sans JP',sans-serif";
+        ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.fillText("EMPTY", rect.width/2, rect.height/2);
+        return;
+      }
+      drawPiecePreview(ctx, rect, piece);
+    });
+  }
+
+  function refillIfNeeded(){
+    if(tray.every(p => p.used)){
+      tray[0] = { shape: pickShape(), color: pickColor(), used:false };
+      tray[1] = { shape: pickShape(), color: pickColor(), used:false };
+      tray[2] = { shape: pickShape(), color: pickColor(), used:false };
+      toast("ピースを補充しました");
+      drawPieces();
+    }
+  }
+
+  // Start drag from tray slot
+  function startDragFrom(index, e){
+    const piece = tray[index];
+    if(piece.used) return;
+    drag = {
+      fromIndex: index,
+      piece,
+      pointerId: e.pointerId,
+      anchorAxial: {q:0,r:0},
+      valid: false
+    };
+    boardCanvas.setPointerCapture(e.pointerId);
+    updateDrag(e);
+  }
+
+  function updateDrag(e){
+    if(!drag) return;
+    const p = boardPointFromEvent(e);
+    const a = pixelToAxial(p.x, p.y);
+    drag.anchorAxial = a;
+    drag.valid = canPlace(drag.piece, a.q, a.r);
+    draw();
+  }
+
+  function endDrag(e){
+    if(!drag) return;
+    const a = drag.anchorAxial;
+    if(drag.valid){
+      place(drag.piece, a.q, a.r);
+      tray[drag.fromIndex].used = TrueFalse(true);
+      incScore(drag.piece.shape.blocks.length * 10);
+      incPlaced(1);
+      draw();
+      drawPieces();
+      refillIfNeeded();
+    } else {
+      // no placement
+    }
+    drag = null;
+    draw();
+  }
+
+  // tiny helper to avoid accidental 'true' replacement in some environments
+  function TrueFalse(v){ return v ? true : false; }
+
+  // Attach events to tray canvases
+  pieceCanvases.forEach((c, i) => {
+    c.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      startDragFrom(i, e);
+    }, {passive:false});
+  });
+
+  // Board handles move/up (dragging across)
+  boardCanvas.addEventListener("pointermove", (e) => {
+    if(!drag) return;
+    e.preventDefault();
+    updateDrag(e);
+  }, {passive:false});
+
+  boardCanvas.addEventListener("pointerup", (e) => {
+    if(!drag) return;
+    e.preventDefault();
+    endDrag(e);
+  }, {passive:false});
+
+  boardCanvas.addEventListener("pointercancel", (e) => {
+    if(!drag) return;
+    drag = null;
+    draw();
+  }, {passive:true});
+
+  // ---------- Score / UI ----------
+  let score = 0;
+  let placed = 0;
+  const scoreEl = document.getElementById("score");
+  const placedEl = document.getElementById("placed");
+  function incScore(d){
+    score += d;
+    scoreEl.textContent = String(score);
+  }
+  function incPlaced(d){
+    placed += d;
+    placedEl.textContent = String(placed);
+  }
+
+  document.getElementById("restart").addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    occ.clear();
+    score = 0; placed = 0;
+    scoreEl.textContent = "0";
+    placedEl.textContent = "0";
+    tray[0] = { shape: pickShape(), color: pickColor(), used:false };
+    tray[1] = { shape: pickShape(), color: pickColor(), used:false };
+    tray[2] = { shape: pickShape(), color: pickColor(), used:false };
+    toast("リスタートしました");
+    draw();
+    drawPieces();
+  }, {passive:false});
+
+  // Prevent double-tap zoom on iOS (but keep drag responsive)
+  let lastTouchEnd = 0;
+  document.addEventListener("touchend", (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) e.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
+
+  // initial render
+  draw();
+  drawPieces();
+
+})();
+</script>
 </body>
 </html>
